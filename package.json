@@ -1,0 +1,22 @@
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "next": "latest",
+    "nodemailer": "^8.0.10",
+    "pg": "^8.21.0",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.0",
+    "@types/pg": "^8.20.0",
+    "typescript": "latest"
+  }
+}

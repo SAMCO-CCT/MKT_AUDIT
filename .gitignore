@@ -1,0 +1,12 @@
+node_modules
+# Next.js build output
+.next/
+
+# Databases & Logs
+*.sql
+audit_logs.sql
+
+# Local env files
+# .env
+.env.local
+.env.*.local
