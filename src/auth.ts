@@ -1,18 +1,8 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { pool } from "./lib/db";
-
-type AppUserRow = {
-  id: number;
-  company: string;
-  username: string;
-  password_hash: string | null;
-  password: string | null;
-  display_name: string | null;
-  role: string | null;
-  is_active: boolean;
-};
+import { prisma } from "./lib/prisma";
+import { hasCompanyPermission } from "@/lib/permissions";
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
@@ -39,58 +29,41 @@ export const authOptions: NextAuthOptions = {
 
         if (!company || !username || !password) return null;
 
-        const result = await pool.query<AppUserRow>(
-          `
-          SELECT
-            id,
-            company,
-            username,
-            password_hash,
-            password,
-            display_name,
-            role,
-            is_active
-          FROM app_users
-          WHERE company = $1
-            AND username = $2
-          LIMIT 1
-          `,
-          [company, username]
-        );
+        const user = await prisma.app_users.findUnique({
+          where: { username },
+          select: {
+            id: true,
+            username: true,
+            password_hash: true,
+            display_name: true,
+            email: true,
+            is_active: true,
+          },
+        });
 
-        const user = result.rows[0];
-        if (!user || !user.is_active) return null;
+        if (!user || !user.is_active || !user.password_hash) return null;
 
-        let validPassword = false;
-
-        if (user.password_hash) {
-          validPassword = await bcrypt.compare(password, user.password_hash);
-        } else if (user.password) {
-          // Fallback for existing plain-text password rows. Use password_hash in production.
-          validPassword = user.password === password;
-        }
-
+        const validPassword = await bcrypt.compare(password, user.password_hash);
         if (!validPassword) return null;
 
-        await pool.query(
-          `
-          UPDATE app_users
-          SET
-            last_login_at = CURRENT_TIMESTAMP,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE id = $1
-          `,
-          [user.id]
-        );
+        const canAccessCompany = await hasCompanyPermission(user.id, company);
+        if (!canAccessCompany) return null;
+
+        await prisma.app_users.update({
+          where: { id: user.id },
+          data: {
+            last_login_at: new Date(),
+            updated_at: new Date(),
+          },
+        });
 
         return {
-          id: String(user.id),
+          id: user.id,
           name: user.display_name || user.username,
-          email: `${user.username}@local.samco`,
+          email: user.email || `${user.username}@local.samco`,
           username: user.username,
           displayName: user.display_name || user.username,
-          role: user.role || "user",
-          company: user.company,
+          company,
           companyName,
         };
       },
@@ -99,9 +72,9 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
+        token.id = user.id;
         token.username = user.username;
         token.displayName = user.displayName;
-        token.role = user.role;
         token.company = user.company;
         token.companyName = user.companyName;
       }
@@ -110,9 +83,9 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       session.user = {
         ...session.user,
+        id: token.id as string,
         username: token.username,
         displayName: token.displayName,
-        role: token.role,
         company: token.company,
         companyName: token.companyName,
       };

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProjectApiAuthHeader, getProjectApiUrl } from "../../../lib/basicAuth";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
+import { getProjectApiAuthHeader, getProjectApiUrl } from "../../../lib/basicAuth";
+import { getProjectPermissionFilter } from "@/lib/permissions";
 
 type ExternalProject = {
   Company: string;
@@ -15,14 +16,22 @@ export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.company) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const company = session.user.company;
+    const { searchParams } = new URL(req.url);
+    const company = searchParams.get("company") || session.user.company || "";
+
+    if (!company) {
+      return NextResponse.json(
+        { success: false, message: "Missing company parameter" },
+        { status: 400 }
+      );
+    }
 
     const response = await fetch(getProjectApiUrl(company), {
       method: "GET",
@@ -35,23 +44,30 @@ export async function GET(req: NextRequest) {
 
     if (!response.ok) {
       const text = await response.text();
-      console.error("External project API error:", response.status, text);
-
       return NextResponse.json(
         {
           success: false,
           message: "Failed to fetch external project API",
           status: response.status,
+          detail: text,
         },
-        { status: 502 }
+        { status: response.status }
       );
     }
 
     const data = (await response.json()) as ExternalProject[];
+    const { allowAll, allowedProjectCodes } = await getProjectPermissionFilter(
+      session.user.id,
+      company
+    );
+
+    const projects = allowAll
+      ? data
+      : data.filter((project) => allowedProjectCodes.has(project.Project));
 
     return NextResponse.json({
       success: true,
-      projects: data,
+      projects,
     });
   } catch (error) {
     console.error("External projects error:", error);

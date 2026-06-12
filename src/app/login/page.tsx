@@ -3,56 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
+import SamcoIcon from "@/components/SamcoIcon";
 
 type CompanyOption = {
   Company: string;
   CompanyName: string;
 };
-
-function BuildingIcon() {
-  return (
-    <svg className="login-field-icon" viewBox="0 0 24 24" fill="none">
-      <path d="M4 21h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M6 21V7a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v14" stroke="currentColor" strokeWidth="2" />
-      <path d="M8 9h2M8 13h2M8 17h2M12 9h2M12 13h2M12 17h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function UserIcon() {
-  return (
-    <svg className="login-field-icon" viewBox="0 0 24 24" fill="none">
-      <path d="M20 21a8 8 0 0 0-16 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg className="login-field-icon" viewBox="0 0 24 24" fill="none">
-      <rect x="4" y="10" width="16" height="11" rx="2" stroke="currentColor" strokeWidth="2" />
-      <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function EyeIcon() {
-  return (
-    <svg className="login-eye-icon" viewBox="0 0 24 24" fill="none">
-      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" stroke="currentColor" strokeWidth="2" />
-      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
-
-function ArrowRightIcon() {
-  return (
-    <svg className="login-button-icon" viewBox="0 0 24 24" fill="none">
-      <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -64,7 +20,6 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -76,7 +31,7 @@ export default function LoginPage() {
     }
 
     if (status === "unauthenticated") {
-      loadCompanies();
+      void loadCompanies();
     }
   }, [status, router]);
 
@@ -109,8 +64,8 @@ export default function LoginPage() {
       return;
     }
 
-    if (!username || !password) {
-      setErrorMessage("กรุณากรอก username และ password");
+    if (!username.trim() || !password.trim()) {
+      setErrorMessage("กรุณากรอกชื่อผู้ใช้และรหัสผ่าน");
       return;
     }
 
@@ -122,7 +77,7 @@ export default function LoginPage() {
         redirect: false,
         company,
         companyName,
-        username,
+        username: username.trim(),
         password,
       });
 
@@ -141,108 +96,91 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="smk-login-page">
-      <section className="smk-login-panel">
-        <div className="smk-login-brand-row">
-          <div className="smk-login-logo">S</div>
-
-          <div>
-            <div className="smk-login-brand-line">
-              <span className="smk-login-brand-name">SAMMAKORN</span>
-              {/* <span className="smk-login-badge">EST. 1974</span> */}
-            </div>
-            <div className="smk-login-brand-subtitle">สมายใจที่ได้อยู่บ้าน</div>
-          </div>
+    <main className="login">
+      <div className="login-hero">
+        <div className="login-logo">
+          <span className="logo-mark login-logo-mark"><span /></span>
+          <span className="login-logo-text">
+            <span className="logo-name">SAMMAKORN</span>
+            <span className="logo-sub">PROPERTY</span>
+          </span>
         </div>
+        <div className="login-tag">QUALITY AUDIT SYSTEM</div>
+      </div>
 
-        <div className="smk-login-heading">
-          <h1>เข้าสู่ระบบ</h1>
-          <p>กรุณาระบุบริษัท บัญชีผู้ใช้งาน และรหัสผ่านเพื่อเข้าทำงานในระบบ</p>
-        </div>
+      <form className="login-card" onSubmit={submitLogin}>
+        <div className="login-title">Weekly Site Audit</div>
+        <div className="login-sub">เข้าสู่ระบบเพื่อเริ่มตรวจคุณภาพหน้างาน</div>
 
-        {errorMessage ? <div className="smk-login-alert">{errorMessage}</div> : null}
+        <label className="lfield">
+          <span className="ll"><SamcoIcon name="building" size={12} stroke={2} />บริษัท / หน่วยงาน</span>
+          <span className="lselect">
+            <select
+              required
+              value={company}
+              disabled={loadingCompanies}
+              onChange={(e) => {
+                const selectedCompany = e.target.value;
+                const selected = companies.find((item) => item.Company === selectedCompany);
 
-        <form onSubmit={submitLogin} className="smk-login-form">
-          <div className="smk-login-field">
-            <label>
-              <BuildingIcon />
-              เลือกบริษัท (COMPANY)
-            </label>
+                setCompany(selectedCompany);
+                setCompanyName(selected?.CompanyName || selectedCompany);
+                setErrorMessage("");
+              }}
+            >
+              <option value="" disabled>
+                {loadingCompanies ? "กำลังโหลดบริษัท..." : "เลือกบริษัท"}
+              </option>
+              {companies.map((item) => (
+                <option key={item.Company} value={item.Company}>{item.CompanyName}</option>
+              ))}
+            </select>
+            <span className="lcaret"><SamcoIcon name="chevR" size={14} stroke={2.4} /></span>
+          </span>
+        </label>
 
-            <div className="smk-select-wrap">
-              <select
-                value={company}
-                disabled={loadingCompanies}
-                onChange={(e) => {
-                  const selectedCompany = e.target.value;
-                  const selected = companies.find(
-                    (item) => item.Company === selectedCompany
-                  );
+        <label className="lfield">
+          <span className="ll"><SamcoIcon name="user" size={12} stroke={2} />ชื่อผู้ใช้ / รหัสพนักงาน</span>
+          <input
+            value={username}
+            onChange={(e) => { setUsername(e.target.value); setErrorMessage(""); }}
+            placeholder="เช่น napat.s หรือ EMP-1042"
+            autoComplete="username"
+            autoFocus
+          />
+        </label>
 
-                  setCompany(selectedCompany);
-                  setCompanyName(selected?.CompanyName || selectedCompany);
-                }}
-              >
-                <option value="">
-                  {loadingCompanies ? "กำลังโหลดบริษัท..." : "-- กรุณาเลือกบริษัทในเครือ --"}
-                </option>
-
-                {companies.map((item) => (
-                  <option key={item.Company} value={item.Company}>
-                    {item.CompanyName}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="smk-login-field">
-            <label>
-              <UserIcon />
-              ชื่อผู้ใช้งาน (USERNAME)
-            </label>
-
+        <label className="lfield">
+          <span className="ll"><SamcoIcon name="lock" size={12} stroke={2} />รหัสผ่าน</span>
+          <span className="lpw">
             <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="กรอกชื่อผู้ใช้งาน หรือ รหัสพนักงาน"
-              autoComplete="username"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setErrorMessage(""); }}
+              placeholder="••••••••"
+              autoComplete="current-password"
             />
-          </div>
+            <button
+              type="button"
+              className="eye"
+              onClick={() => setShowPassword((current) => !current)}
+              title={showPassword ? "ซ่อน" : "แสดง"}
+            >
+              <SamcoIcon name={showPassword ? "eyeoff" : "eye"} size={15} stroke={1.9} />
+            </button>
+          </span>
+        </label>
 
-          <div className="smk-login-field">
-            <label>
-              <LockIcon />
-              รหัสผ่าน (PASSWORD)
-            </label>
+        {errorMessage ? <div className="lerr"><SamcoIcon name="alert" size={12} stroke={2.2} />{errorMessage}</div> : null}
 
-            <div className="smk-password-wrap">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="กรอกรหัสผ่าน"
-                autoComplete="current-password"
-              />
+        <button type="submit" className="lbtn" disabled={submitting}>
+          <SamcoIcon name="logout" size={15} stroke={2.1} style={{ transform: "scaleX(-1)" }} />
+          {submitting ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
+        </button>
+        <div className="lhint">ใช้บัญชีพนักงาน Sammakorn · มีปัญหาเข้าระบบ ติดต่อ IT Support</div>
+      </form>
 
-              <button
-                type="button"
-                className={`smk-eye-button${showPassword ? " active" : ""}`}
-                onClick={() => setShowPassword((current) => !current)}
-                aria-label={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
-              >
-                <EyeIcon />
-              </button>
-            </div>
-          </div>
-
-          <button className="smk-login-submit" type="submit" disabled={submitting}>
-            <span>{submitting ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}</span>
-            <ArrowRightIcon />
-          </button>
-        </form>
-      </section>
+      <div className="login-foot">© {new Date().getFullYear()} Sammakorn PCL · Internal use only</div>
     </main>
   );
 }

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "../../../lib/db";
-import { sendAuditAlertEmail } from "../../../lib/mailer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
-
+import { prisma } from "@/lib/prisma";
+import { sendAuditAlertEmail } from "@/lib/mailer";
+import { hasProjectPermission } from "@/lib/permissions";
 
 type AuditItem = {
   id?: string;
@@ -41,22 +41,25 @@ type AuditPayload = {
   overallComment?: string;
 };
 
+function toDateOnly(value: string) {
+  return new Date(`${value}T00:00:00.000Z`);
+}
+
 export async function POST(req: NextRequest) {
   try {
-    // const body = (await req.json()) as AuditPayload;
     const session = await getServerSession(authOptions);
 
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    let body: any;
+    let body: AuditPayload;
 
     try {
-      body = await req.json() as AuditPayload;
+      body = (await req.json()) as AuditPayload;
     } catch {
       return NextResponse.json(
         { success: false, message: "Invalid JSON body" },
@@ -64,7 +67,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const requiredFields = ["project", "projectName", "auditor", "date", "zones"];
+    const requiredFields: (keyof AuditPayload)[] = ["project", "projectName", "auditor", "date", "zones"];
 
     for (const field of requiredFields) {
       if (!body[field]) {
@@ -82,33 +85,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ใช้ company จาก session เท่านั้น ไม่เชื่อค่าที่ client ส่งมา
-    const company = session.user.company;
-    const companyName = session.user.companyName;
+    const company = session.user.company || "";
+    const companyName = session.user.companyName || company;
 
     const project = body.project || "";
     const projectName = body.projectName || project;
-    const auditor = body.auditor || "";
+    const auditor = body.auditor || session.user.displayName || session.user.username || "";
     const date = body.date || new Date().toISOString().slice(0, 10);
     const zones: AuditZone[] = Array.isArray(body.zones) ? body.zones : [];
+
+    if (!company || !project) {
+      return NextResponse.json(
+        { success: false, message: "Missing company or project" },
+        { status: 400 }
+      );
+    }
+
+    const allowed = await hasProjectPermission(session.user.id, company, project);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 }
+      );
+    }
 
     const allItems = zones.flatMap((zone) =>
       Array.isArray(zone.items) ? zone.items : []
     );
 
     const total = allItems.length;
-
     const answered = allItems.filter(
       (item) => item.status === "pass" || item.status === "fix"
     ).length;
-
-    const fixed = allItems.filter(
-      (item) => item.status === "fix"
-    ).length;
-
-    const passed = allItems.filter(
-      (item) => item.status === "pass"
-    ).length;
+    const fixed = allItems.filter((item) => item.status === "fix").length;
+    const passed = allItems.filter((item) => item.status === "pass").length;
     const overallComment = body.overallComment || "";
 
     const fixItems: string[] = [];
@@ -127,42 +137,56 @@ export async function POST(req: NextRequest) {
 
     const fixItemsText = fixItems.join("\n");
 
-    const result = await pool.query(
-      `
-      INSERT INTO audit_logs (
+    const rawJson = {
+      ...body,
+      company,
+      companyName,
+      project,
+      projectName,
+      auditor,
+      date,
+      total,
+      answered,
+      passed,
+      fixed,
+    };
+
+    const auditLog = await prisma.audit_logs.create({
+      data: {
         company,
-        company_name,
-        project_code,
-        project,
+        company_name: companyName,
+        project_code: project,
+        project: projectName,
         auditor,
-        audit_date,
-        total_items,
+        audit_date: toDateOnly(date),
+        total_items: total,
         answered,
         passed,
         fixed,
-        fix_items,
-        overall_comment,
-        raw_json
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-      RETURNING id, created_at
-      `,
-      [
-        company,
-        companyName,
-        project,
-        projectName,
-        auditor,
-        date,
-        total,
-        answered,
-        passed,
-        fixed,
-        fixItemsText,
-        overallComment,
-        body,
-      ]
-    );
+        fix_items: fixItemsText,
+        overall_comment: overallComment,
+        raw_json: rawJson as never,
+        created_by_user_id: session.user.id,
+      },
+      select: {
+        id: true,
+        created_at: true,
+      },
+    });
+
+    await prisma.audit_drafts.updateMany({
+      where: {
+        user_id: session.user.id,
+        company_code: company,
+        project_code: project,
+        audit_date: toDateOnly(date),
+        submitted_at: null,
+      },
+      data: {
+        submitted_at: new Date(),
+        updated_at: new Date(),
+      },
+    });
 
     let emailSent = false;
     let emailError: string | null = null;
@@ -179,7 +203,7 @@ export async function POST(req: NextRequest) {
         answered,
         passed,
         fixed,
-        fixItems: fixItemsText,
+        zones,
         overallComment,
       });
       emailSent = true;
@@ -193,7 +217,7 @@ export async function POST(req: NextRequest) {
       message: emailSent
         ? "Audit saved and email sent successfully"
         : "Audit saved, but email failed",
-      data: result.rows[0],
+      data: auditLog,
       emailSent,
       emailError,
     });

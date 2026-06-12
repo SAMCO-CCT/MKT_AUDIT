@@ -6,24 +6,25 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.0.8",
     "bcryptjs": "^3.0.3",
-    "lucide-react": "^1.17.0",
     "next": "16.2.7",
     "next-auth": "^4.24.14",
-    "nodemailer": "^7.0.7",
+    "nodemailer": "^7.0.13",
     "pg": "^8.21.0",
     "react": "19.2.7",
     "react-dom": "19.2.7"
   },
   "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "latest",
     "@types/nodemailer": "^8.0.0",
     "@types/pg": "^8.20.0",
-    "eslint": "^9.39.4",
-    "eslint-config-next": "^16.2.7",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "prisma": "^7.8.0",
     "typescript": "latest"
   }
 }

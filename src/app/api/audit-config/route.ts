@@ -1,25 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "../../../lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
-
-
-type DbAuditRow = {
-  zone_key: string;
-  emoji: string | null;
-  zone_label: string;
-  color: string | null;
-  bg: string | null;
-  item_key: string | null;
-  item_label: string | null;
-  description: string | null;
-};
+import { prisma } from "@/lib/prisma";
+import { hasProjectPermission } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.company) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 }
@@ -27,8 +16,8 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const company = session.user.company;
-    const projectCode = searchParams.get("project");
+    const company = searchParams.get("company") || session.user.company || "";
+    const projectCode = searchParams.get("project") || "";
 
     if (!company || !projectCode) {
       return NextResponse.json(
@@ -40,68 +29,47 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const result = await pool.query<DbAuditRow>(
-      `
-      SELECT
-        z.zone_key,
-        z.emoji,
-        z.label AS zone_label,
-        z.color,
-        z.bg,
-        i.item_key,
-        i.label AS item_label,
-        i.description
-      FROM audit_zones z
-      LEFT JOIN audit_items i
-        ON i.company = z.company
-        AND i.project_code = z.project_code
-        AND i.zone_key = z.zone_key
-        AND i.is_active = TRUE
-      WHERE z.company = $1
-        AND z.project_code = $2
-        AND z.is_active = TRUE
-      ORDER BY
-        z.sort_order ASC,
-        i.sort_order ASC
-      `,
-      [company, projectCode]
-    );
-
-    const zoneMap = new Map<string, {
-      id: string;
-      emoji: string;
-      label: string;
-      color: string;
-      bg: string;
-      items: { id: string; label: string; desc: string }[];
-    }>();
-
-    for (const row of result.rows) {
-      if (!zoneMap.has(row.zone_key)) {
-        zoneMap.set(row.zone_key, {
-          id: row.zone_key,
-          emoji: row.emoji || "",
-          label: row.zone_label,
-          color: row.color || "#1D4ED8",
-          bg: row.bg || "#EFF6FF",
-          items: [],
-        });
-      }
-
-      if (row.item_key && row.item_label) {
-        zoneMap.get(row.zone_key)?.items.push({
-          id: row.item_key,
-          label: row.item_label,
-          desc: row.description || "",
-        });
-      }
+    const allowed = await hasProjectPermission(session.user.id, company, projectCode);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 }
+      );
     }
+
+    const auditZones = await prisma.audit_zones.findMany({
+      where: {
+        company,
+        project_code: projectCode,
+        is_active: true,
+      },
+      orderBy: [{ sort_order: "asc" }, { zone_key: "asc" }],
+      include: {
+        audit_items: {
+          where: { is_active: true },
+          orderBy: [{ sort_order: "asc" }, { item_key: "asc" }],
+        },
+      },
+    });
+
+    const zones = auditZones.map((zone) => ({
+      id: zone.zone_key,
+      emoji: zone.emoji || "",
+      label: zone.label,
+      color: zone.color || "#1D4ED8",
+      bg: zone.bg || "#EFF6FF",
+      items: zone.audit_items.map((item) => ({
+        id: item.item_key,
+        label: item.label,
+        desc: item.description || "",
+      })),
+    }));
 
     return NextResponse.json({
       success: true,
       company,
       project: projectCode,
-      zones: Array.from(zoneMap.values()),
+      zones,
     });
   } catch (error) {
     console.error("Get audit config error:", error);

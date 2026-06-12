@@ -1,0 +1,140 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model app_users {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username         String            @unique(map: "uq_app_users_username")
+  password_hash    String
+  display_name     String?
+  email            String?
+  is_active        Boolean           @default(true)
+  last_login_at    DateTime?         @db.Timestamp(6)
+  created_at       DateTime          @default(now()) @db.Timestamp(6)
+  updated_at       DateTime          @default(now()) @db.Timestamp(6)
+  audit_drafts     audit_drafts[]
+  audit_logs       audit_logs[]
+  user_permissions user_permissions?
+}
+
+model audit_drafts {
+  draft_id       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String    @db.Uuid
+  company_code   String
+  company_name   String?
+  project_code   String
+  project_name   String
+  audit_date     DateTime  @db.Date
+  auditor_name   String?
+  raw_json       Json
+  total_items    Int       @default(0)
+  answered_items Int       @default(0)
+  passed_items   Int       @default(0)
+  fixed_items    Int       @default(0)
+  last_saved_at  DateTime  @default(now()) @db.Timestamp(6)
+  created_at     DateTime  @default(now()) @db.Timestamp(6)
+  updated_at     DateTime  @default(now()) @db.Timestamp(6)
+  submitted_at   DateTime? @db.Timestamp(6)
+  app_users      app_users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, company_code, project_code, audit_date], map: "uq_audit_drafts_active", where: raw("(submitted_at IS NULL)"))
+  @@index([company_code, project_code, audit_date], map: "idx_audit_drafts_project_date")
+  @@index([user_id, submitted_at, last_saved_at(sort: Desc)], map: "idx_audit_drafts_user_active")
+}
+
+model audit_items {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company      String
+  project_code String
+  zone_key     String
+  item_key     String
+  label        String
+  description  String?
+  sort_order   Int?        @default(0)
+  is_active    Boolean?    @default(true)
+  created_at   DateTime?   @default(now()) @db.Timestamp(6)
+  audit_zones  audit_zones @relation(fields: [company, project_code, zone_key], references: [company, project_code, zone_key], onDelete: Cascade, onUpdate: NoAction, map: "fk_audit_items_zone")
+
+  @@unique([company, project_code, item_key], map: "uq_company_project_item")
+  @@index([company, project_code, zone_key], map: "idx_audit_items_company_project_zone")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model audit_logs {
+  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company            String?
+  company_name       String?
+  project_code       String?
+  project            String?
+  auditor            String?
+  audit_date         DateTime?  @db.Date
+  total_items        Int?       @default(0)
+  answered           Int?       @default(0)
+  passed             Int?       @default(0)
+  fixed              Int?       @default(0)
+  fix_items          String?
+  overall_comment    String?
+  raw_json           Json?
+  created_at         DateTime?  @default(now()) @db.Timestamp(6)
+  created_by_user_id String?    @db.Uuid
+  app_users          app_users? @relation(fields: [created_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([company, project_code], map: "idx_audit_logs_company_project")
+  @@index([company, project_code, audit_date(sort: Desc)], map: "idx_audit_logs_company_project_date")
+  @@index([created_at(sort: Desc)], map: "idx_audit_logs_created_at")
+  @@index([created_by_user_id], map: "idx_audit_logs_created_by_user")
+}
+
+model audit_zones {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company      String
+  project_code String
+  zone_key     String
+  emoji        String?
+  label        String
+  color        String?       @default("#1D4ED8")
+  bg           String?       @default("#EFF6FF")
+  sort_order   Int?          @default(0)
+  is_active    Boolean?      @default(true)
+  created_at   DateTime?     @default(now()) @db.Timestamp(6)
+  audit_items  audit_items[]
+
+  @@unique([company, project_code, zone_key], map: "uq_company_project_zone")
+  @@index([company, project_code], map: "idx_audit_zones_company_project")
+}
+
+model user_permissions {
+  permission_id String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String    @unique(map: "uq_user_permissions_all_access", where: raw("((company_code IS NULL) AND (project_code IS NULL))")) @db.Uuid
+  company_code  String?
+  project_code  String?
+  access_level  String?
+  is_active     Boolean   @default(true)
+  created_at    DateTime  @default(now()) @db.Timestamp(6)
+  updated_at    DateTime  @default(now()) @db.Timestamp(6)
+  app_users     app_users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, company_code], map: "uq_user_permissions_company_all_projects", where: raw("((company_code IS NOT NULL) AND (project_code IS NULL))"))
+  @@unique([user_id, company_code, project_code], map: "uq_user_permissions_project", where: raw("((company_code IS NOT NULL) AND (project_code IS NOT NULL))"))
+  @@index([user_id, company_code, project_code, is_active], map: "idx_user_permissions_lookup")
+  @@index([user_id, is_active], map: "idx_user_permissions_user_active")
+}
+
+model app_config {
+  config_id    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  config_key   String   @unique(map: "uq_app_config_key") @db.VarChar(100)
+  config_value String
+  value_type   String   @default("string") @db.VarChar(20)
+  is_secret    Boolean  @default(false)
+  description  String?
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now()) @db.Timestamp(6)
+  updated_at   DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([is_active], map: "idx_app_config_active")
+}
