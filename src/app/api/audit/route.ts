@@ -4,6 +4,7 @@ import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendAuditAlertEmail } from "@/lib/mailer";
 import { hasProjectPermission } from "@/lib/permissions";
+import { normalizeDateInputValue, toDateOnly } from "@/lib/date";
 
 type AuditItem = {
   id?: string;
@@ -40,10 +41,6 @@ type AuditPayload = {
   zones?: AuditZone[];
   overallComment?: string;
 };
-
-function toDateOnly(value: string) {
-  return new Date(`${value}T00:00:00.000Z`);
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -91,12 +88,21 @@ export async function POST(req: NextRequest) {
     const project = body.project || "";
     const projectName = body.projectName || project;
     const auditor = body.auditor || session.user.displayName || session.user.username || "";
-    const date = body.date || new Date().toISOString().slice(0, 10);
+    const date = normalizeDateInputValue(
+      body.date || new Date().toISOString().slice(0, 10)
+    );
     const zones: AuditZone[] = Array.isArray(body.zones) ? body.zones : [];
 
     if (!company || !project) {
       return NextResponse.json(
         { success: false, message: "Missing company or project" },
+        { status: 400 }
+      );
+    }
+
+    if (!date) {
+      return NextResponse.json(
+        { success: false, message: "Invalid date" },
         { status: 400 }
       );
     }
@@ -205,6 +211,7 @@ export async function POST(req: NextRequest) {
         fixed,
         zones,
         overallComment,
+        auditLogId: auditLog.id,
       });
       emailSent = true;
     } catch (error) {

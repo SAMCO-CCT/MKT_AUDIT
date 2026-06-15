@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { canAccessProject } from "@/lib/permissions";
+import { normalizeDateInputValue, toDateOnly } from "@/lib/date";
 
 type AuditItemStatus = "pass" | "fix" | null;
 
@@ -32,10 +33,6 @@ type AuditDraftReturnRow = {
   fixed_items: number;
   last_saved_at: Date;
 };
-
-function toDateOnly(value: string) {
-  return new Date(`${value}T00:00:00.000Z`);
-}
 
 function getDraftStats(zones: AuditZone[]) {
   const allItems = zones.flatMap((zone) =>
@@ -82,6 +79,14 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const normalizedAuditDate = normalizeDateInputValue(auditDate);
+    if (!normalizedAuditDate) {
+      return NextResponse.json(
+        { success: false, message: "Invalid auditDate" },
+        { status: 400 }
+      );
+    }
+
     const hasPermission = await canAccessProject({
       userId: session.user.id,
       companyCode: company,
@@ -100,7 +105,7 @@ export async function GET(req: NextRequest) {
         user_id: session.user.id,
         company_code: company,
         project_code: project,
-        audit_date: toDateOnly(auditDate),
+        audit_date: toDateOnly(normalizedAuditDate),
         submitted_at: null,
       },
       select: {
@@ -169,6 +174,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const normalizedAuditDate = normalizeDateInputValue(auditDate);
+    if (!normalizedAuditDate) {
+      return NextResponse.json(
+        { success: false, message: "Invalid auditDate" },
+        { status: 400 }
+      );
+    }
+
     const hasPermission = await canAccessProject({
       userId: session.user.id,
       companyCode: company,
@@ -190,7 +203,7 @@ export async function POST(req: NextRequest) {
       companyName,
       project,
       projectName,
-      auditDate,
+      auditDate: normalizedAuditDate,
       auditorName,
       zones,
       overallComment,
@@ -221,7 +234,7 @@ export async function POST(req: NextRequest) {
         ${companyName || null},
         ${project},
         ${projectName},
-        ${auditDate}::date,
+        ${normalizedAuditDate}::date,
         ${auditorName || null},
         ${JSON.stringify(rawJson)}::jsonb,
         ${totalItems},

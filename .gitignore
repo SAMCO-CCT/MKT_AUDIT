@@ -1,0 +1,20 @@
+node_modules
+# Next.js build output
+.next/
+
+# Databases & Logs
+*.sql
+audit_logs.sql
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
+.DS_Store
+
+# zip / backup
+*.zip
+*.rar
+*.7z
+tsconfig.tsbuildinfo

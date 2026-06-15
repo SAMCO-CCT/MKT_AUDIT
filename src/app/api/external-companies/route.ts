@@ -1,13 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProjectApiAuthHeader, getProjectApiUrl } from "../../../lib/basicAuth";
-
-type ExternalProject = {
-  Company: string;
-  CompanyName: string;
-  Project: string;
-  ProjectName: string;
-  IsHousingJuristicPerson: boolean;
-};
+import { getUniqueAuditProjects, type ExternalProject } from "@/types/project";
 
 export async function GET() {
   try {
@@ -34,9 +27,10 @@ export async function GET() {
     }
 
     const projects = (await response.json()) as ExternalProject[];
+    const housingCompanyProjects = getUniqueAuditProjects(projects);
     const companyMap = new Map<string, { Company: string; CompanyName: string }>();
 
-    for (const item of projects) {
+    for (const item of housingCompanyProjects) {
       if (!companyMap.has(item.Company)) {
         companyMap.set(item.Company, {
           Company: item.Company,

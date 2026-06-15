@@ -4,19 +4,23 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import SamcoIcon, { type SamcoIconName } from "@/components/SamcoIcon";
+import {
+  buildSessionDraftKey,
+  buildSessionDraftSyncHashKey,
+  buildSessionDraftUserPrefix,
+} from "@/lib/sessionDraftKeys";
+import {
+  getUniqueAuditProjects,
+  type ExternalProject,
+} from "@/types/project";
+import { normalizeDateInputValue, todayDateInputValue } from "@/lib/date";
 import type { AuditStatus, Zone } from "./data";
 
 type Checks = Record<string, AuditStatus | undefined>;
 type Notes = Record<string, string>;
 type ZoneComments = Record<string, string>;
 
-type ProjectOption = {
-  Company: string;
-  CompanyName: string;
-  Project: string;
-  ProjectName: string;
-  IsHousingJuristicPerson?: boolean;
-};
+type ProjectOption = ExternalProject;
 
 type DraftRawItem = {
   id?: string;
@@ -118,7 +122,7 @@ type SummaryProps = {
 };
 
 function todayISO() {
-  return new Date().toISOString().split("T")[0];
+  return todayDateInputValue();
 }
 
 function weekNo() {
@@ -365,19 +369,54 @@ export default function SamcoAuditPage() {
   }, [allItems, checks]);
 
   function toDateInputValue(value: string) {
-    if (!value) return "";
+    return normalizeDateInputValue(value);
+  }
 
-    const dateValue = new Date(value);
 
-    if (Number.isNaN(dateValue.getTime())) {
-      return value.slice(0, 10);
-    }
+  function normalizeDraftZonesToAuditState(draftZones: DraftRawZone[]) {
+    const loadedZones: Zone[] = [];
+    const nextChecks: Checks = {};
+    const nextNotes: Notes = {};
+    const nextZoneComments: ZoneComments = {};
 
-    const year = dateValue.getFullYear();
-    const month = String(dateValue.getMonth() + 1).padStart(2, "0");
-    const day = String(dateValue.getDate()).padStart(2, "0");
+    draftZones.forEach((zone, zoneIndex) => {
+      const zoneId = zone.id || `draft-zone-${zoneIndex + 1}`;
+      const items = Array.isArray(zone.items)
+        ? zone.items.map((item, itemIndex) => {
+            const itemId =
+              item.id || `draft-item-${zoneIndex + 1}-${itemIndex + 1}`;
 
-    return `${year}-${month}-${day}`;
+            if (item.status === "pass" || item.status === "fix") {
+              nextChecks[itemId] = item.status;
+            }
+
+            if (item.note) {
+              nextNotes[itemId] = item.note;
+            }
+
+            return {
+              id: itemId,
+              label: item.label || item.id || "ไม่ระบุรายการ",
+              desc: item.desc || "",
+            };
+          })
+        : [];
+
+      if (zone.comment) {
+        nextZoneComments[zoneId] = zone.comment;
+      }
+
+      loadedZones.push({
+        id: zoneId,
+        emoji: "",
+        label: zone.label || zone.id || "ไม่ระบุหมวดหมู่",
+        color: "#0B3D91",
+        bg: "#EBF3FF",
+        items,
+      });
+    });
+
+    return { loadedZones, nextChecks, nextNotes, nextZoneComments };
   }
 
   async function loadDraftList() {
@@ -448,43 +487,8 @@ export default function SamcoAuditPage() {
       const draftZones: DraftRawZone[] = Array.isArray(raw.zones)
         ? raw.zones
         : [];
-      const loadedZones: Zone[] = draftZones.map((zone) => ({
-        id: zone.id || zone.label || "zone",
-        emoji: "",
-        label: zone.label || zone.id || "ไม่ระบุหมวดหมู่",
-        color: "#0B3D91",
-        bg: "#EBF3FF",
-        items: Array.isArray(zone.items)
-          ? zone.items.map((item) => ({
-              id: item.id || item.label || "item",
-              label: item.label || item.id || "ไม่ระบุรายการ",
-              desc: item.desc || "",
-            }))
-          : [],
-      }));
-      const nextChecks: Checks = {};
-      const nextNotes: Notes = {};
-      const nextZoneComments: ZoneComments = {};
-
-      draftZones.forEach((zone) => {
-        if (zone.id && zone.comment) {
-          nextZoneComments[zone.id] = zone.comment;
-        }
-
-        if (Array.isArray(zone.items)) {
-          zone.items.forEach((item) => {
-            if (!item.id) return;
-
-            if (item.status === "pass" || item.status === "fix") {
-              nextChecks[item.id] = item.status;
-            }
-
-            if (item.note) {
-              nextNotes[item.id] = item.note;
-            }
-          });
-        }
-      });
+      const { loadedZones, nextChecks, nextNotes, nextZoneComments } =
+        normalizeDraftZonesToAuditState(draftZones);
 
       setCompany(raw.company || draft.company_code);
       setProject(raw.project || draft.project_code);
@@ -572,7 +576,9 @@ export default function SamcoAuditPage() {
         throw new Error(result?.message || "Cannot load projects");
       }
 
-      const loadedProjects: ProjectOption[] = result.projects || [];
+      const loadedProjects: ProjectOption[] = getUniqueAuditProjects(
+        Array.isArray(result.projects) ? result.projects : [],
+      );
       setProjects(loadedProjects);
 
       const lastSelection = getLastAuditSelection();
@@ -785,12 +791,39 @@ export default function SamcoAuditPage() {
 
   function getSessionDraftKey() {
     if (!loginUser?.id || !company || !project || !date) return null;
-    return `audit-draft:${loginUser.id}:${company}:${project}:${date}`;
+
+    return buildSessionDraftKey({
+      userId: loginUser.id,
+      company,
+      project,
+      auditDate: date,
+    });
   }
 
   function getSessionDraftSyncHashKey() {
-    const draftKey = getSessionDraftKey();
-    return draftKey ? `${draftKey}:sync-hash` : null;
+    if (!loginUser?.id || !company || !project || !date) return null;
+
+    return buildSessionDraftSyncHashKey({
+      userId: loginUser.id,
+      company,
+      project,
+      auditDate: date,
+    });
+  }
+
+  function getSessionDraftKeyByParams(
+    companyCode: string,
+    projectCode: string,
+    auditDate: string,
+  ) {
+    if (!loginUser?.id) return null;
+
+    return buildSessionDraftKey({
+      userId: loginUser.id,
+      company: companyCode,
+      project: projectCode,
+      auditDate,
+    });
   }
 
   function getSessionDraftSyncHashKeyByParams(
@@ -799,7 +832,13 @@ export default function SamcoAuditPage() {
     auditDate: string,
   ) {
     if (!loginUser?.id) return null;
-    return `audit-draft:${loginUser.id}:${companyCode}:${projectCode}:${auditDate}:sync-hash`;
+
+    return buildSessionDraftSyncHashKey({
+      userId: loginUser.id,
+      company: companyCode,
+      project: projectCode,
+      auditDate,
+    });
   }
 
   function buildSessionDraftPayload(): SessionAuditDraft {
@@ -882,7 +921,11 @@ export default function SamcoAuditPage() {
     const previousLocalHash = lastLocalDraftHashRef.current;
 
     if (!lastSyncedDraftHashRef.current) {
-      const syncHashKey = getSessionDraftSyncHashKey();
+      const syncHashKey = getSessionDraftSyncHashKeyByParams(
+        draft.company,
+        draft.project,
+        draft.auditDate,
+      );
       lastSyncedDraftHashRef.current = syncHashKey
         ? sessionStorage.getItem(syncHashKey)
         : null;
@@ -918,7 +961,11 @@ export default function SamcoAuditPage() {
       if (parsed.schemaVersion !== 1) return null;
 
       const draftHash = getDraftSyncHash(parsed);
-      const syncHashKey = getSessionDraftSyncHashKey();
+      const syncHashKey = getSessionDraftSyncHashKeyByParams(
+        parsed.company,
+        parsed.project,
+        parsed.auditDate,
+      );
       const syncedDraftHash = syncHashKey
         ? sessionStorage.getItem(syncHashKey)
         : null;
@@ -940,7 +987,9 @@ export default function SamcoAuditPage() {
   ) {
     if (typeof window === "undefined" || !loginUser?.id) return null;
 
-    const key = `audit-draft:${loginUser.id}:${companyCode}:${projectCode}:${auditDate}`;
+    const key = getSessionDraftKeyByParams(companyCode, projectCode, auditDate);
+    if (!key) return null;
+
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
 
@@ -983,7 +1032,7 @@ export default function SamcoAuditPage() {
   function cleanupSessionDraftsForOtherUsers() {
     if (typeof window === "undefined" || !loginUser?.id) return;
 
-    const currentUserPrefix = `audit-draft:${loginUser.id}:`;
+    const currentUserPrefix = buildSessionDraftUserPrefix(loginUser.id);
 
     for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
       const key = sessionStorage.key(index);
@@ -1002,53 +1051,22 @@ export default function SamcoAuditPage() {
   ) {
     if (typeof window === "undefined" || !loginUser?.id) return;
 
-    const key = `audit-draft:${loginUser.id}:${companyCode}:${projectCode}:${auditDate}`;
+    const key = getSessionDraftKeyByParams(companyCode, projectCode, auditDate);
     const syncHashKey = getSessionDraftSyncHashKeyByParams(
       companyCode,
       projectCode,
       auditDate,
     );
 
-    sessionStorage.removeItem(key);
+    if (key) sessionStorage.removeItem(key);
     if (syncHashKey) sessionStorage.removeItem(syncHashKey);
   }
 
   function applySessionDraftToState(draft: SessionAuditDraft) {
     isRestoringSessionDraftRef.current = true;
 
-    const loadedZones: Zone[] = draft.zones.map((zone) => ({
-      id: zone.id || zone.label || "zone",
-      emoji: "",
-      label: zone.label || zone.id || "ไม่ระบุหมวดหมู่",
-      color: "#0B3D91",
-      bg: "#EBF3FF",
-      items: zone.items.map((item) => ({
-        id: item.id || item.label || "item",
-        label: item.label || item.id || "ไม่ระบุรายการ",
-        desc: item.desc || "",
-      })),
-    }));
-    const nextChecks: Checks = {};
-    const nextNotes: Notes = {};
-    const nextZoneComments: ZoneComments = {};
-
-    draft.zones.forEach((zone) => {
-      if (zone.id && zone.comment) {
-        nextZoneComments[zone.id] = zone.comment;
-      }
-
-      zone.items.forEach((item) => {
-        if (!item.id) return;
-
-        if (item.status === "pass" || item.status === "fix") {
-          nextChecks[item.id] = item.status;
-        }
-
-        if (item.note) {
-          nextNotes[item.id] = item.note;
-        }
-      });
-    });
+    const { loadedZones, nextChecks, nextNotes, nextZoneComments } =
+      normalizeDraftZonesToAuditState(draft.zones);
 
     setCompany(draft.company);
     setProject(draft.project);
@@ -1123,7 +1141,11 @@ export default function SamcoAuditPage() {
       setLastDraftSavedAt(
         result.draft?.last_saved_at || new Date().toISOString(),
       );
-      const syncHashKey = getSessionDraftSyncHashKey();
+      const syncHashKey = getSessionDraftSyncHashKeyByParams(
+        draft.company,
+        draft.project,
+        draft.auditDate,
+      );
 
       draftDirtyRef.current = false;
       lastSyncedDraftHashRef.current = draftHash;
@@ -1325,7 +1347,7 @@ export default function SamcoAuditPage() {
                       key={`${item.Company}-${item.Project}`}
                       value={item.Project}
                     >
-                      {item.ProjectName}
+                      {item.Project} · {item.ProjectName}
                     </option>
                   ))}
               </select>

@@ -2,6 +2,7 @@ import * as React from "react";
 import nodemailer from "nodemailer";
 import { render } from "@react-email/render";
 import { AuditActionEmail, type AuditEmailZone } from "@/emails/AuditActionEmail";
+import { createAuditLinkToken } from "@/lib/auditLinkToken";
 
 export async function sendAuditAlertEmail(params: {
   company?: string;
@@ -16,6 +17,7 @@ export async function sendAuditAlertEmail(params: {
   fixed: number;
   zones: AuditEmailZone[];
   overallComment?: string;
+  auditLogId?: string;
 }) {
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
     throw new Error("Missing SMTP configuration");
@@ -41,10 +43,30 @@ export async function sendAuditAlertEmail(params: {
       ? `Audit Alert: ${displayProject} มี ${params.fixed} รายการต้องแก้`
       : `Audit Completed: ${displayProject}`;
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+  const exportToken = params.auditLogId
+    ? createAuditLinkToken(params.auditLogId)
+    : "";
+  const summaryExportUrl =
+    appUrl && params.auditLogId && exportToken
+      ? `${appUrl}/api/audit-exports/summary?auditLogId=${encodeURIComponent(
+          params.auditLogId
+        )}&token=${encodeURIComponent(exportToken)}`
+      : undefined;
+  const issueExportUrl =
+    appUrl && params.auditLogId && exportToken
+      ? `${appUrl}/api/audit-issues?auditLogId=${encodeURIComponent(
+          params.auditLogId
+        )}&format=csv&token=${encodeURIComponent(exportToken)}`
+      : undefined;
+
   const html = await render(
     React.createElement(AuditActionEmail, {
       ...params,
-      appUrl: process.env.NEXT_PUBLIC_APP_URL,
+      appUrl,
+      auditLogId: params.auditLogId,
+      summaryExportUrl,
+      issueExportUrl,
     })
   );
 

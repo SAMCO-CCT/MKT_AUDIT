@@ -64,7 +64,7 @@ export default function LoginPage() {
       return;
     }
 
-    if (!username.trim() || !password.trim()) {
+    if (!username.trim() || password.length === 0) {
       setErrorMessage("กรุณากรอกชื่อผู้ใช้และรหัสผ่าน");
       return;
     }

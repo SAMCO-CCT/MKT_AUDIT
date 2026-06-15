@@ -42,6 +42,9 @@ export type AuditActionEmailProps = {
   zones: AuditEmailZone[];
   overallComment?: string;
   appUrl?: string;
+  auditLogId?: string;
+  summaryExportUrl?: string;
+  issueExportUrl?: string;
 };
 
 const fontFamily =
@@ -269,6 +272,8 @@ export function AuditActionEmail({
   zones,
   overallComment,
   appUrl,
+  summaryExportUrl,
+  issueExportUrl,
 }: AuditActionEmailProps) {
   const displayProject = projectName || project || "-";
   const displayCompany = companyName || company || "-";
@@ -277,6 +282,9 @@ export function AuditActionEmail({
   const groupedRows = groupRowsByZone(zones);
   const fixRows = rows.filter(({ item }) => item.status === "fix");
   const pendingRows = rows.filter(({ item }) => item.status !== "pass" && item.status !== "fix");
+  const summaryButtonStyle = appUrl ? secondaryButtonStyle : buttonStyle;
+  const issueButtonStyle =
+    appUrl || summaryExportUrl ? secondaryButtonStyle : buttonStyle;
 
   const preview =
     fixed > 0
@@ -325,22 +333,25 @@ export function AuditActionEmail({
 
           {fixRows.length > 0 ? (
             <Section style={sectionStyle}>
-              <Text style={sectionTitleStyle}>รายการที่ต้องแก้ไข</Text>
+              <Text style={sectionTitleStyle}>Issue Tracking</Text>
               <table width="100%" cellPadding="0" cellSpacing="0" style={tableStyle}>
                 <thead>
                   <tr style={tableHeadRowStyle}>
-                    <th align="left" style={{ ...thStyle, width: "28%" }}>หมวดหมู่</th>
-                    <th align="left" style={{ ...thStyle, width: "42%" }}>ประเด็น</th>
-                    <th align="left" style={{ ...thStyle, width: "30%" }}>หมายเหตุ</th>
+                    <th align="left" style={{ ...thStyle, width: "14%" }}>Issue</th>
+                    <th align="left" style={{ ...thStyle, width: "24%" }}>หมวดหมู่</th>
+                    <th align="left" style={{ ...thStyle, width: "38%" }}>ประเด็น</th>
+                    <th align="left" style={{ ...thStyle, width: "24%" }}>หมายเหตุ</th>
                   </tr>
                 </thead>
                 <tbody>
                   {fixRows.map(({ zoneLabel, item }, index) => (
                     <tr key={`fix-${zoneLabel}-${item.id || item.label}-${index}`} style={{ backgroundColor: index % 2 === 0 ? "#ffffff" : "#FFF7F7" }}>
+                      <td style={tdStrongStyle}>ISS-{String(index + 1).padStart(3, "0")}</td>
                       <td style={tdStrongStyle}>{zoneLabel}</td>
                       <td style={tdStyle}>
                         <div style={{ fontWeight: 700, color: "#111827" }}>{item.label}</div>
                         {item.desc ? <div style={itemDescriptionStyle}>{item.desc}</div> : null}
+                        <div style={openStatusStyle}>Open</div>
                       </td>
                       <td style={tdNoteStyle}>{item.note || "-"}</td>
                     </tr>
@@ -414,11 +425,21 @@ export function AuditActionEmail({
             <Text style={ctaTextStyle}>
               {fixed > 0
                 ? "พบรายการที่ต้องดำเนินการแก้ไข กรุณาตรวจสอบรายละเอียดและอัปเดตความคืบหน้าในระบบ"
-                : "ตรวจสอบเรียบร้อยแล้ว สามารถเปิดระบบเพื่อดูรายละเอียดหรือ Export Excel ได้"}
+                : "ตรวจสอบเรียบร้อยแล้ว สามารถเปิดระบบเพื่อดูรายละเอียดหรือ Export CSV ได้"}
             </Text>
             {appUrl ? (
               <Button href={appUrl} style={buttonStyle}>
-                เปิดระบบเพื่อติดตามงาน / Export Excel
+                เปิดระบบติดตามงาน
+              </Button>
+            ) : null}
+            {summaryExportUrl ? (
+              <Button href={summaryExportUrl} style={summaryButtonStyle}>
+                Export ตารางสรุป CSV
+              </Button>
+            ) : null}
+            {issueExportUrl ? (
+              <Button href={issueExportUrl} style={issueButtonStyle}>
+                Export Issue Tracking CSV
               </Button>
             ) : null}
           </Section>
@@ -582,6 +603,13 @@ const itemDescriptionStyle: React.CSSProperties = {
   fontWeight: 500,
   marginTop: "3px",
 };
+const openStatusStyle: React.CSSProperties = {
+  color: "#E05A47",
+  fontSize: "10px",
+  fontWeight: 800,
+  marginTop: "5px",
+  textTransform: "uppercase",
+};
 const itemListStyle: React.CSSProperties = {
   margin: 0,
   paddingLeft: "16px",
@@ -643,6 +671,19 @@ const buttonStyle: React.CSSProperties = {
   padding: "10px 20px",
   borderRadius: "6px",
   boxShadow: "0 2px 4px rgba(224,90,71,0.2)",
+};
+const secondaryButtonStyle: React.CSSProperties = {
+  ...buttonStyle,
+  backgroundColor: "#0B3D91",
+  marginLeft: "8px",
+};
+const linkButtonStyle: React.CSSProperties = {
+  ...buttonStyle,
+  backgroundColor: "#ffffff",
+  color: "#0B3D91",
+  border: "1px solid #BFDBFE",
+  marginLeft: "8px",
+  boxShadow: "none",
 };
 const hrStyle: React.CSSProperties = { borderColor: "#E6EBF1", margin: "25px 0" };
 const footerStyle: React.CSSProperties = { fontSize: "11px", color: "#9CA3AF", margin: "0 0 5px", textAlign: "center", lineHeight: 1.5 };

@@ -47,7 +47,7 @@ export async function hasProjectPermission(
 }
 
 export async function getProjectPermissionFilter(userId: string, companyCode: string) {
-  const permissions = await prisma.user_permissions.findMany({
+  const permissions = (await prisma.user_permissions.findMany({
     where: {
       user_id: userId,
       is_active: true,
@@ -57,13 +57,11 @@ export async function getProjectPermissionFilter(userId: string, companyCode: st
       company_code: true,
       project_code: true,
     },
-  });
+  })) as Pick<UserPermissionRow, "company_code" | "project_code">[];
 
   const allowAll = permissions.some((row) => row.project_code === null);
   const allowedProjectCodes = new Set(
-    permissions
-      .map((row) => row.project_code)
-      .filter((projectCode): projectCode is string => Boolean(projectCode))
+    permissions.flatMap((row) => (row.project_code ? [row.project_code] : []))
   );
 
   return {

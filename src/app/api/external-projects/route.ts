@@ -3,14 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { getProjectApiAuthHeader, getProjectApiUrl } from "../../../lib/basicAuth";
 import { getProjectPermissionFilter } from "@/lib/permissions";
-
-type ExternalProject = {
-  Company: string;
-  CompanyName: string;
-  Project: string;
-  ProjectName: string;
-  IsHousingJuristicPerson: boolean;
-};
+import { getUniqueAuditProjects, type ExternalProject } from "@/types/project";
 
 export async function GET(req: NextRequest) {
   try {
@@ -61,9 +54,13 @@ export async function GET(req: NextRequest) {
       company
     );
 
+    const housingCompanyProjects = getUniqueAuditProjects(data);
+
     const projects = allowAll
-      ? data
-      : data.filter((project) => allowedProjectCodes.has(project.Project));
+      ? housingCompanyProjects
+      : housingCompanyProjects.filter((project) =>
+          allowedProjectCodes.has(project.Project)
+        );
 
     return NextResponse.json({
       success: true,

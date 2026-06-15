@@ -4,6 +4,21 @@ import { authOptions } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { hasProjectPermission } from "@/lib/permissions";
 
+type AuditConfigItemRow = {
+  item_key: string;
+  label: string;
+  description: string | null;
+};
+
+type AuditConfigZoneRow = {
+  zone_key: string;
+  emoji: string | null;
+  label: string;
+  color: string | null;
+  bg: string | null;
+  audit_items: AuditConfigItemRow[];
+};
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -37,7 +52,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const auditZones = await prisma.audit_zones.findMany({
+    const auditZones = (await prisma.audit_zones.findMany({
       where: {
         company,
         project_code: projectCode,
@@ -50,7 +65,7 @@ export async function GET(req: NextRequest) {
           orderBy: [{ sort_order: "asc" }, { item_key: "asc" }],
         },
       },
-    });
+    })) as AuditConfigZoneRow[];
 
     const zones = auditZones.map((zone) => ({
       id: zone.zone_key,
