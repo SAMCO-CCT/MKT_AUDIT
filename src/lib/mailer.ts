@@ -64,7 +64,6 @@ export async function sendAuditAlertEmail(params: {
     React.createElement(AuditActionEmail, {
       ...params,
       appUrl,
-      auditLogId: params.auditLogId,
       summaryExportUrl,
       issueExportUrl,
     })

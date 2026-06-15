@@ -42,7 +42,6 @@ export type AuditActionEmailProps = {
   zones: AuditEmailZone[];
   overallComment?: string;
   appUrl?: string;
-  auditLogId?: string;
   summaryExportUrl?: string;
   issueExportUrl?: string;
 };
@@ -61,36 +60,6 @@ function formatAuditDate(value: string) {
     month: "long",
     year: "numeric",
   }).format(date);
-}
-
-function statusLabel(status?: AuditEmailItem["status"]) {
-  if (status === "pass") return "ผ่าน";
-  if (status === "fix") return "ต้องแก้";
-  return "รอตรวจ";
-}
-
-function getStatusTone(status?: AuditEmailItem["status"]): React.CSSProperties {
-  if (status === "pass") {
-    return {
-      color: "#047857",
-      backgroundColor: "#ECFDF5",
-      border: "1px solid #A7F3D0",
-    };
-  }
-
-  if (status === "fix") {
-    return {
-      color: "#E05A47",
-      backgroundColor: "#FFF0F0",
-      border: "1px solid #FDE8E8",
-    };
-  }
-
-  return {
-    color: "#64748B",
-    backgroundColor: "#F8FAFC",
-    border: "1px solid #E2E8F0",
-  };
 }
 
 function getProgress(answered: number, total: number) {
@@ -237,24 +206,6 @@ function SummaryCard({
       <Text style={summaryLabelStyle}>{label}</Text>
       <Text style={{ ...summaryValueStyle, color: colorMap[tone] }}>{value}</Text>
     </Column>
-  );
-}
-
-function StatusBadge({ status }: { status?: AuditEmailItem["status"] }) {
-  return (
-    <span
-      style={{
-        ...getStatusTone(status),
-        display: "inline-block",
-        borderRadius: "999px",
-        padding: "4px 8px",
-        fontSize: "11px",
-        fontWeight: 800,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {statusLabel(status)}
-    </span>
   );
 }
 
@@ -619,21 +570,6 @@ const itemListItemStyle: React.CSSProperties = {
   paddingLeft: "2px",
   lineHeight: 1.35,
 };
-const statusListStyle: React.CSSProperties = {
-  display: "block",
-};
-const statusListItemStyle: React.CSSProperties = {
-  margin: "0 0 8px",
-};
-const noteListStyle: React.CSSProperties = {
-  margin: 0,
-  paddingLeft: "16px",
-};
-const noteListItemStyle: React.CSSProperties = {
-  margin: "0 0 8px",
-  paddingLeft: "2px",
-  lineHeight: 1.4,
-};
 const pendingBoxStyle: React.CSSProperties = {
   backgroundColor: "#FFFBEB",
   border: "1px solid #FDE68A",
@@ -676,14 +612,6 @@ const secondaryButtonStyle: React.CSSProperties = {
   ...buttonStyle,
   backgroundColor: "#0B3D91",
   marginLeft: "8px",
-};
-const linkButtonStyle: React.CSSProperties = {
-  ...buttonStyle,
-  backgroundColor: "#ffffff",
-  color: "#0B3D91",
-  border: "1px solid #BFDBFE",
-  marginLeft: "8px",
-  boxShadow: "none",
 };
 const hrStyle: React.CSSProperties = { borderColor: "#E6EBF1", margin: "25px 0" };
 const footerStyle: React.CSSProperties = { fontSize: "11px", color: "#9CA3AF", margin: "0 0 5px", textAlign: "center", lineHeight: 1.5 };

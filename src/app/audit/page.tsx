@@ -194,7 +194,6 @@ export default function SamcoAuditPage() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [lastLocalSavedAt, setLastLocalSavedAt] = useState<string | null>(null);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
-  const [draftSaveError, setDraftSaveError] = useState(false);
 
   const [drafts, setDrafts] = useState<AuditDraftListItem[]>([]);
   const [showDraftPopup, setShowDraftPopup] = useState(false);
@@ -711,7 +710,6 @@ export default function SamcoAuditPage() {
     removeLastAuditSelection();
     setLastLocalSavedAt(null);
     setLastDraftSavedAt(null);
-    setDraftSaveError(false);
     setShowSummary(false);
     window.scrollTo(0, 0);
   }
@@ -1080,7 +1078,6 @@ export default function SamcoAuditPage() {
     setZoneComments(nextZoneComments);
     setOverallComment(draft.overallComment || "");
     setLastLocalSavedAt(draft.localSavedAt);
-    setDraftSaveError(false);
     setShowSummary(false);
 
     window.setTimeout(() => {
@@ -1124,7 +1121,6 @@ export default function SamcoAuditPage() {
 
     try {
       setSavingDraft(true);
-      setDraftSaveError(false);
 
       const response = await fetch("/api/audit-drafts", {
         method: "POST",
@@ -1150,14 +1146,12 @@ export default function SamcoAuditPage() {
       draftDirtyRef.current = false;
       lastSyncedDraftHashRef.current = draftHash;
       if (syncHashKey) sessionStorage.setItem(syncHashKey, draftHash);
-      setDraftSaveError(false);
 
       if (!silent) {
         alert("บันทึก Draft สำเร็จ");
       }
     } catch (error) {
       console.error("Save draft error:", error);
-      setDraftSaveError(true);
 
       if (!silent) {
         alert("บันทึก Draft ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");

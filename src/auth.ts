@@ -29,6 +29,11 @@ export const authOptions: NextAuthOptions = {
 
         if (!company || !username || !password) return null;
 
+        console.log("[AUTH] login attempt", {
+          username,
+          hasPassword: Boolean(password),
+        });
+
         const user = await prisma.app_users.findUnique({
           where: { username },
           select: {
@@ -39,6 +44,11 @@ export const authOptions: NextAuthOptions = {
             email: true,
             is_active: true,
           },
+        });
+
+        console.log("[AUTH] user found", {
+          found: Boolean(user),
+          isActive: user?.is_active,
         });
 
         if (!user || !user.is_active || !user.password_hash) return null;
